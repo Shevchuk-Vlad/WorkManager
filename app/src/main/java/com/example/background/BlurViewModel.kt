@@ -16,24 +16,34 @@ import androidx.work.WorkManager
 import com.example.background.workers.BlurWorker
 import com.example.background.workers.CleanupWorker
 import com.example.background.workers.SaveImageToFileWorker
+import androidx.work.Constraints
 
 
 class BlurViewModel(application: Application) : ViewModel() {
 
-    internal var imageUri: Uri? = null
-    internal val outputWorkInfos: LiveData<List<WorkInfo>>
+    private var imageUri: Uri? = null
     internal var outputUri: Uri? = null
     private val workManager = WorkManager.getInstance(application)
 
+    internal val outputWorkInfos: LiveData<List<WorkInfo>> =
+        workManager.getWorkInfosByTagLiveData(TAG_OUTPUT)
 
     init {
         imageUri = getImageUri(application.applicationContext)
-        outputWorkInfos = workManager.getWorkInfosByTagLiveData(TAG_OUTPUT)
     }
-    /**
-     * Create the WorkRequest to apply the blur and save the resulting image
-     * @param blurLevel The amount to blur the image
-     */
+
+    internal fun cancelWork() {
+        workManager.cancelUniqueWork(IMAGE_MANIPULATION_WORK_NAME)
+    }
+
+    private fun createInputDataForUri(): Data {
+        val builder = Data.Builder()
+        imageUri?.let {
+            builder.putString(KEY_IMAGE_URI, imageUri.toString())
+        }
+        return builder.build()
+    }
+
     internal fun applyBlur(blurLevel: Int) {
 
         var continuation = workManager
@@ -53,10 +63,13 @@ class BlurViewModel(application: Application) : ViewModel() {
             continuation = continuation.then(blurBuilder.build())
         }
 
-        val save = OneTimeWorkRequestBuilder<SaveImageToFileWorker>()
-            .addTag(TAG_OUTPUT) // <-- ADD THIS
+        val constraints = Constraints.Builder()
+            .setRequiresCharging(true)
             .build()
-
+        val save = OneTimeWorkRequestBuilder<SaveImageToFileWorker>()
+            .setConstraints(constraints)
+            .addTag(TAG_OUTPUT)
+            .build()
         continuation = continuation.then(save)
 
         continuation.enqueue()
@@ -73,22 +86,15 @@ class BlurViewModel(application: Application) : ViewModel() {
     private fun getImageUri(context: Context): Uri {
         val resources = context.resources
 
-        val imageUri = Uri.Builder()
+        return Uri.Builder()
             .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
             .authority(resources.getResourcePackageName(R.drawable.android_cupcake))
             .appendPath(resources.getResourceTypeName(R.drawable.android_cupcake))
             .appendPath(resources.getResourceEntryName(R.drawable.android_cupcake))
             .build()
 
-        return imageUri
     }
-    private fun createInputDataForUri(): Data {
-        val builder = Data.Builder()
-        imageUri?.let {
-            builder.putString(KEY_IMAGE_URI, imageUri.toString())
-        }
-        return builder.build()
-    }
+
     internal fun setOutputUri(outputImageUri: String?) {
         outputUri = uriOrNull(outputImageUri)
     }
