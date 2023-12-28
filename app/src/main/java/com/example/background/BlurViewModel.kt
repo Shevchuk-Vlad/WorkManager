@@ -53,6 +53,8 @@ class BlurViewModel(application: Application) : ViewModel() {
                 OneTimeWorkRequest.from(CleanupWorker::class.java)
             )
 
+        // Create charging constraint  Create and add charging constraint
+
         val constraints = Constraints.Builder()
             .setRequiresCharging(true)
             .build()
